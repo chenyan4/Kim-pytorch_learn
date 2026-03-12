@@ -77,7 +77,9 @@ class LeafDataset(Dataset):
             return image
 
 image_dir="/data/chenyan/pytorch_learn/data/kaggle_data"
-trans=transforms.Compose([transforms.ToTensor()])
+
+# transforms.Normalize 对三个通道做归一化
+trans=transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])])
 
 train_dataset=LeafDataset(train_csv,image_dir,train_labels,train=True,transform=trans)
 test_datasets=LeafDataset(test_csv,image_dir,train=False,transform=trans)
