@@ -5,6 +5,9 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torchvision import datasets,transforms
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
 
 scale=0.01
 w1=torch.randn(size=(20,1,3,3))*scale
@@ -16,6 +19,19 @@ b3=torch.zeros(128)
 w4=torch.randn(size=(128,10))*scale
 b4=torch.zeros(10)
 params=[w1,b1,w2,b2,w3,b3,w4,b4]
+
+def load_data_fashion_mnist(batch_size,resize=None):
+    trans=[transforms.ToTensor()]
+    if resize:
+        trans.insert(0,transforms.Resize(resize))
+    trans=transforms.Compose(trans)
+
+    train_data=datasets.FashionMNIST('./data',train=True,transform=trans,download=False)
+    test_data=datasets.FashionMNIST('./data',train=False,transform=trans,download=False)
+
+    return (DataLoader(train_data,batch_size=batch_size,shuffle=True,drop_last=True,num_workers=4),
+    DataLoader(test_data,batch_size=batch_size,shuffle=False,drop_last=True,num_workers=4))
+
 
 def lenet(X,params):
     h1_conv=F.conv2d(input=X,weight=params[0],bias=params[1])
@@ -30,13 +46,15 @@ def lenet(X,params):
     Y_hat=torch.matmul(h3_activation,params[6])+params[7]
     return Y_hat
 
-loass=nn.CrossEntropyLoss(reduction='none') # reduction='none'表示不在内部做平均或求和，返回样本各自损失，[batch_size]
+loss=nn.CrossEntropyLoss(reduction='none') # reduction='none'表示不在内部做平均或求和，返回样本各自损失，[batch_size]
 
 # 将参数放到GPU上的函数
+
+
 def get_params(params,device):
     new_params=[p.clone().to(device) for p in params] #将模型参数分别放到不同GPU上,clone保证复制一份
     for param in new_params:
-        param.requires_grad
+        param.requires_grad_(True)
     return new_params
 
 new_params=get_params(params,'cuda:0')
@@ -74,8 +92,89 @@ def parallel_scatter(data,devices):
             output.append(data[(i*split):((i+1)*split)].to(devices[i]))
     return tuple(output)
 
+def split_batch(X,y,devices):
+    assert X.shape[0]==y.shape[0]
+    return (parallel_scatter(X,devices),parallel_scatter(y,devices))
+
+def SGD(params,lr,batch_size):
+    with torch.no_grad():
+        for param in params:
+            param-=lr*(param.grad/batch_size)
+            param.grad.zero_()
+
 output=parallel_scatter(data,devices)
 print(output)
+
+
+
+def train_batch(X,y,device_params,devices,lr):
+    X_splits,y_splits=split_batch(X,y,devices)
+    ls=[loss(lenet(X_split,device_param),y_split).sum() for X_split,y_split,device_param in zip(X_splits,y_splits,device_params)]
+
+    # 计算每个小批量上的梯度
+    for l in ls:
+        l.backward()
+    
+    with torch.no_grad():
+        # 对params中的梯度逐一做 求和和广播
+        for i in range(len(device_params[0])):
+            # 拿去每个device_params 的w1、b1、w2等的梯度
+            allreduce([device_params[c][i].grad for c in range(len(device_params))])
+    
+    # 对每个 device_params进行梯度更新：
+    for param in device_params:
+        SGD(param,lr,X.shape[0])
+
+def accuracy(y_hat,y):
+    y_hat=y_hat.argmax(axis=1)
+    y=y.reshape(y_hat.shape)
+    cmp=(y==y_hat).sum().item()
+    return cmp
+
+def evaluate_accuracy(params,test_iter):
+    device=params[0].device
+    acc_num,num=0,0
+    with torch.no_grad():
+        for x,y in test_iter:
+            x=x.to(device)
+            y=y.to(device)
+            y_hat=lenet(x,params)
+            acc_num+=accuracy(y_hat,y)
+            num+=len(x)
+        return acc_num/num
+
+def train(num_gpus,batch_size,lr):
+    train_iter,test_iter=load_data_fashion_mnist(batch_size)
+    devices=[f'cuda:{i}' for i in range(num_gpus)]
+    device_params=[get_params(params,device) for device in devices]
+    num_epochs=10
+    test_acc=[]
+    for epoch in range(num_epochs):
+        for x,y in train_iter:
+            train_batch(x,y,device_params,devices,lr)
+            torch.cuda.synchronize()
+        test_acc.append(evaluate_accuracy(device_params[0],test_iter))
+        print(f'epoch:{epoch+1},test_acc:{test_acc[-1]},')
+    
+    return test_acc
+
+def draw_acc(test_acc,name):
+    plt.figure(figsize=(12,4))
+    plt.plot(test_acc,label="test_acc",color="blue",linestyle='-',linewidth=2)
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Acc Curve")
+    plt.legend(loc="upper right")
+    
+    plt.savefig(f"/data/chenyan/pytorch_learn/data/output/{name}.png",dpi=300)
+    plt.show()
+
+if __name__=="__main__":
+    # 保证每个GPU拿到相同batch_size,同时可以增大lr
+    test_acc=train(2,256*2,lr=0.2*2)
+    draw_acc(test_acc)
+
+
 
         
 
