@@ -42,8 +42,7 @@ def resnet_18(num_classes,in_channels=1):
         return nn.Sequential(*blk)
 
     net=nn.Sequential(nn.Conv2d(in_channels,64,kernel_size=2,padding=3),nn.BatchNorm2d(64),nn.ReLU(),nn.MaxPool2d(kernel_size=3,stride=2,padding=1),
-    resnet_block(64,64,2,True),resnet_block(64,64,2,True),resnet_block(64,128,2),resnet_block(128,128,2,True),resnet_block(128,256,2),resnet_block(256,256,2,True),resnet_block(256,512,2),resnet_block(512,512,2,True),
-    nn.AdaptiveAvgPool2d((1,1)),nn.Flatten(),nn.Linear(512,num_classes))
+    resnet_block(64,64,2,True),resnet_block(64,128,2),resnet_block(128,256,2),resnet_block(256,512,2),nn.AdaptiveAvgPool2d((1,1)),nn.Flatten(),nn.Linear(512,num_classes))
 
     return net
 
