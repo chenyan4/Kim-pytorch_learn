@@ -129,7 +129,7 @@ def train_ch6(net,train_iter,test_iter,loss,num_epochs,lr,updater,device=None):
 
     return train_acc,train_loss,test_acc
 
-def draw_loss_acc(train_acc,train_loss,test_acc):
+def draw_loss_acc(train_acc,train_loss,test_acc,path):
     plt.figure(figsize=(12,4))
     plt.subplot(1,2,1)
     plt.plot(train_loss,label="train_loss",color="blue",linestyle='-',linewidth=2)
@@ -143,9 +143,9 @@ def draw_loss_acc(train_acc,train_loss,test_acc):
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
     plt.title("Acc Curve")
-    plt.legend("upper right")
+    plt.legend(loc="upper right")
 
-    plt.savefig("/workspace/Kim-pytorch_learn/data/output/ResNet.png",dpi=300)
+    plt.savefig(f'/data/chenyan/pytorch_learn/data/output/{path}.png',dpi=300)
     plt.show()
 
 def init_weights(m):
