@@ -118,7 +118,7 @@ def train_fine_tunning(net,lr,batch_size=128,num_epochs=10,param_group=True):
         # 其实 parameters()返回的都是[w1,b1,w2,b2]之类的数组，函数内部应该是有 字典检索功能
         updater=torch.optim.SGD([{'params':param_class},{'params':net.fc.parameters(),'lr':lr*10}],lr=lr,weight_decay=0.001) # 最后层用大一些的学习率，其它层用小一些学习率
     else:
-        updater=torch.optim.SGD(net.parameters(),lr=lr,weight_decay=0.001)
+        updater=torch.optim.SGD(net.parameters(),lr=lr,weight_decay=0.001) # weight_decay就是 L2正则， loss=...+wd/2*(|w|)^2，求导就是 wd*param*lr+lr*param.grad; momentum就是动量，累加历史梯度，v=momentum*v+(1-momentum)*grad,param=param-lr*v
 
     train_acc,train_loss,test_acc=train_ch13(net,train_iter,test_iter,num_epochs,loss,updater,devices)
     draw_loss_acc(train_acc,train_loss,test_acc,"hotdog")
