@@ -227,7 +227,7 @@ def nms(boxes,scores,iou_threshold):
         # 如果 只剩一个框，框 保留，退出循环，不用 计算IOU了
         if B.numel()==1:
             break
-        # 取出 最大置信度框，重新变成（1，4）,另外 取出剩下的框 (len(B)-1,4),reshape 确保维度，计算 IOU值，返回是一个（1，4）
+        # 取出 最大置信度框，重新变成（1，4）,另外 取出剩下的框 (len(B)-1,4),reshape 确保维度，计算 IOU值，返回是一个（1，len(B)-1）
         boxes_iou=box_iou(boxes[i,:].reshape(-1,4),boxes[B[1:],:].reshape(-1,4)).reshape(-1)
         # 选择 保留下来的框在 B中的下标,由于box_iou是从 0开始，但是在 B中是从 1开始，所有要 +1
         box_idx=torch.nonzero(boxes_iou<=iou_threshold).reshape(-1) # 返回空张量
