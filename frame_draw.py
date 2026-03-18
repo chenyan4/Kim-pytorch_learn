@@ -29,7 +29,8 @@ def multibox_prior(data,sizes,ratios):
     center_h = (torch.arange(in_height, device=device) + offset_h)*step_h  # arange 不是 arrange
     center_w = (torch.arange(in_width, device=device) + offset_w)*step_w  # width 不是 weight
 
-    shift_y,shift_x=torch.meshgrid(center_h,center_w) # 会得到两个（H，W），前面提供 H，后面提供 W
+    # 显式指定 indexing，避免未来版本行为变化/警告
+    shift_y,shift_x=torch.meshgrid(center_h,center_w,indexing='ij') # 会得到两个（H，W），前面提供 H，后面提供 W
     shift_y,shift_x=shift_y.reshape(-1),shift_x.reshape(-1) # 展平，方便后面zip，由左到右，依次往下
 
     w=torch.cat((size_tensor*torch.sqrt(ratio_tensor[0]),size_tensor[0]*torch.sqrt(ratio_tensor[1:])))*in_height/in_width # wa/W=w^,wa(真实宽度)=W*w^,归一化坐标 保留 高度，动态调整宽度（解决原图 不是正方形情况，保证缩放后宽高比 一致）
@@ -45,21 +46,25 @@ def multibox_prior(data,sizes,ratios):
 def box_to_rect(bbox,color):
     return patches.Rectangle(xy=(bbox[0],bbox[1]),width=bbox[2]-bbox[0],height=bbox[3]-bbox[1],edgecolor=color,fill=False,linewidth=2)
 
-def show_bboxes(image_path,bboxes,save_name,num_rows=2,num_cols=5,labels=None,colors=None):
+def show_bboxes(image_path,bboxes,save_name,labels=None,colors=None):
     image=Image.open(image_path)
     w,h=image.size
     if colors is None:
         colors=['b','g','r','m','c']
     fig=plt.imshow(image)
     for i,bbox in enumerate(bboxes):
-        bbox[0],bbox[2]=bbox[0]*w,bbox[2]*w
-        bbox[1],bbox[3]=bbox[1]*h,bbox[3]*h
+        # 不要就地修改传入的 bbox（它可能是 autograd 的 view）
+        bbox = bbox.detach().to('cpu') # numpy 不对参与计算图、需要反向传播的tensor起效，用detach() 转成视图
+        bbox[0] = bbox[0] * w
+        bbox[2] = bbox[2] * w
+        bbox[1] = bbox[1] * h
+        bbox[3] = bbox[3] * h
         color=colors[i%len(colors)]
-        rect=box_to_rect(bbox.cpu().numpy(),color)
+        rect=box_to_rect(bbox.numpy(),color)
         fig.axes.add_patch(rect)
-        # if labels and len(labels) > i:
-        text_color='w'
-        fig.axes.text(rect.xy[0],rect.xy[1],labels[i],color=text_color,fontsize=10,ha='center',va='center')
+        if labels is not None and len(labels) > i:
+            text_color='w'
+            fig.axes.text(rect.xy[0],rect.xy[1],labels[i].item(),color=text_color,fontsize=10,ha='center',va='center')
 
     plt.savefig(f'/data/chenyan/pytorch_learn/data/images/{save_name}.png',dpi=300)
     # plt.close()  # 不close会复用上次 的画布，和图片读取无关
@@ -104,19 +109,10 @@ def assign_anchor_to_bbox(ground_truth,anchors,device,iou_threshold=0.5):
 
     max_iou,indices=torch.max(jaccard,dim=1) # 在横向上 作比，返回 最大值 和 最大值下标，两个都是 一维的
 
-    # anc_i=torch.nonzero(max_ious>=iou_threshold).reshape(-1) # torch.nonzero()返回 成立值下标，是二维张量，要reshape
-    # box_j=indices[max_iou>=iou_threshold] # 取出满足条件的值
-    # anchors_bbox_map[anc_i]=box_j # 会遍历 anc_i 下标，去赋予box_j的映射
-    anc_i,box_j=[],[]
-    for i,iou in enumerate(max_iou):
-        if iou>=iou_threshold:
-            anc_i.append(i)
-
-    for i in anc_i:
-        box_j.append(indices[i])
-
-    for idx in range(len(anc_i)):
-        anchors_bbox_map[anc_i[idx]]=box_j[idx]
+    # 向量化：直接取出满足阈值的锚框并建立映射
+    anc_i = torch.nonzero(max_iou >= iou_threshold).reshape(-1)
+    if anc_i.numel() > 0:
+        anchors_bbox_map[anc_i] = indices[anc_i]
 
     # 强制 为真实框分配 锚框，防止有的锚框没有真实框对应，兜底的
     col_discard=torch.full((num_anchors,),fill_value=-1)
@@ -266,7 +262,7 @@ def multibox_detection(cls_probs,offset_preds,anchors,nms_threshold=0.5,pos_thre
     out=[]
     # 取出 第一张图片
     for i in range(batch_size):
-        cls_prob=cls_probs[0]
+        cls_prob=cls_probs[i]
         offset_pred=offset_preds[i].reshape(-1,4) # (M,4)
         conf,class_id=torch.max(cls_prob[1:,:],dim=0)
         predict_bb=offset_inverse(anchors,offset_pred) #(M,4)

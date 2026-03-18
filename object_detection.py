@@ -79,7 +79,9 @@ def read_data_bananas(is_train=True):
         # images.append(torchvision.io.read_image(os.path.join(base_url,data_url,img_name))) # torchvision.io.read_image(path) 把图片读到内存中，并直接得到pytorch张量
         targets.append(target.values)
 
-    return images,torch.tensor(targets).unsqueeze(1)/256 # 在第一个维度上 补充一个物体数量维度,除以 256是为了把坐标归一化
+    # 避免 torch.tensor(list_of_ndarray) 的极慢路径
+    targets = np.asarray(targets, dtype=np.float32)
+    return images, torch.from_numpy(targets).unsqueeze(1) / 256 # (N,1,5)
 
 class BananaDataset(Dataset):
     def __init__(self, is_train, transform=None):
@@ -103,14 +105,14 @@ class BananaDataset(Dataset):
         # image = Image.open(image_path)
         # image = transform(image)
         # label = self.labels.iloc[idx].values.astype(np.float32)  # 一行：label,xmin,ymin,xmax,ymax，values转成numpy
-        # return image, torch.tensor(label)
+        # return image, torch.tensor(label).unsqueeze(0)
 
 def load_data_bananas(batch_size):
     train_data=BananaDataset(is_train=True)
     val_data=BananaDataset(is_train=False)
 
-    train_iter=DataLoader(train_data,batch_size=batch_size,shuffle=True,drop_last=True,num_workers=4)
-    val_iter=DataLoader(val_data,batch_size=batch_size,shuffle=False,drop_last=True,num_workers=4)
+    train_iter=DataLoader(train_data,batch_size=batch_size,shuffle=True,drop_last=True,num_workers=2,pin_memory=True)
+    val_iter=DataLoader(val_data,batch_size=batch_size,shuffle=False,drop_last=True,num_workers=2,pin_memory=True)
 
     return train_iter,val_iter
 
