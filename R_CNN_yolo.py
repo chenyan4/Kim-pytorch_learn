@@ -208,6 +208,7 @@ def draw_acc_loss(train_acc,train_loss):
     plt.legend(loc="upper right")
 
     plt.savefig("/data/chenyan/pytorch_learn/data/images/SSD_predict.png",dpi=300)
+    plt.close()
 
 if __name__=="__main__":
     # print(forward(torch.zeros((2,3,20,20)),base_net()).shape)
