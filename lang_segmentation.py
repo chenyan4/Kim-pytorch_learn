@@ -108,8 +108,16 @@ class VOCSegDataSets(Dataset):
         feature,label=voc_rand_crop(self.features[idx],self.labels[idx],self.crop_size[0],self.crop_size[1])
         return (feature,voc_label_indices(label,self.colormap2label))
 
+def load_data_voc(batch_size,crop_size):
+    train_data,test_data=VOCSegDataSets(True,crop_size,base_url),VOCSegDataSets(False,crop_size,base_url)
+    train_iter=DataLoader(train_data,batch_size=batch_size,shuffle=True,drop_last=True,num_workers=4,pin_memory=True)
+    test_iter=DataLoader(test_data,batch_size=batch_size,shuffle=False,drop_last=True,num_workers=4,pin_memory=True)
+
+    return train_iter,test_iter
+
 
 if __name__=="__main__":
+    pass  # 下面均为注释时必须有语句，否则触发 IndentationError
     # n=5
     # train_features,train_labels=read_voc_images(base_url,is_train=True)
     # imgs=train_features[0:n]+train_labels[0:n]
@@ -126,16 +134,16 @@ if __name__=="__main__":
     #     imgs_labels.append(result[1])
     # show_images(imgs_features+imgs_labels,save_name="fea_label_expand")
 
-    crop_size=(320,480)
-    voc_train=VOCSegDataSets(True,crop_size,base_url)
-    voc_test=VOCSegDataSets(False,crop_size,base_url)
+    # crop_size=(320,480)
+    # voc_train=VOCSegDataSets(True,crop_size,base_url)
+    # voc_test=VOCSegDataSets(False,crop_size,base_url)
 
-    batch_size=64
-    train_iter=DataLoader(voc_train,batch_size=batch_size,shuffle=True,drop_last=True,num_workers=8,pin_memory=True)
+    # batch_size=64
+    # train_iter=DataLoader(voc_train,batch_size=batch_size,shuffle=True,drop_last=True,num_workers=8,pin_memory=True)
 
-    for x,y in train_iter:
-        print(x.shape,y.shape)
-        break
+    # for x,y in train_iter:
+    #     print(x.shape,y.shape)
+    #     break
 
 
         
