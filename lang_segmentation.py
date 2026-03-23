@@ -80,7 +80,7 @@ def voc_label_indices(colormap,colormap2label):
     # 先转成 （H，W，C）
     colormap=colormap.permute(1,2,0).numpy().astype('int32')
     idx=(colormap[:,:,0]*256*256+colormap[:,:,1]*256+colormap[:,:,2]).reshape(-1) # （H，W），转变成一维 (H×W,)
-    return colormap2label[idx].reshape((colormap.shape[0],colormap.shape[1])) # 返回 每个像素点 对应的种类，(H×W，)
+    return colormap2label[idx].reshape((colormap.shape[0],colormap.shape[1])) # 返回 每个像素点 对应的种类，(H，W)
 
 # 做 数据增强
 def voc_rand_crop(feature,label,height,width):
