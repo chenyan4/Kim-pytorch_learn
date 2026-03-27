@@ -2,6 +2,7 @@
 import collections
 import re
 import torch
+import random
 
 base_path="/data/chenyan/pytorch_learn/data/timemachine.txt"
 def read_time_machine():
@@ -106,6 +107,84 @@ def load_corpus_time_machine(max_tokens=-1):
     if max_tokens>0:
         corpus=corpus[:max_tokens]
     return corpus,vocab
+
+# 随机抽样生成一个小批量子序列,num_steps是子序列长度
+def seq_data_iter_random(corpus,batch_size,num_steps):
+    # 随机丢弃 前0-num_steps个数据,打破 固定偏移，让模型能看到不同开头序列;random.randint两端都包含，要有num_steps种，必需num_steps-1;num_steps等价于丢掉一个完整块，这没必要
+    corpus=corpus[random.randint(0,num_steps-1):]
+    # 一共有多少段序列，向下取整,-1是 为了保留 预测数据Y，比如 12段，num_steps=3,这个时候 如果分成 4段时，在取预测时会越界
+    num_subseqs=(len(corpus)-1)//num_steps
+    # 取出每一段开头的 起始下标，比如num_steps=3,分成 4段,那么得到[0,3,6,9] 四段的起始下标；12是开区间不取
+    initial_indices=list(range(0,num_subseqs*num_steps,num_steps))
+    # 要将 提取顺序打乱,比如[3,0,9,6]，这是候取的段落就会被 打乱，模型能学到更强的信息
+    random.shuffle(initial_indices)
+
+    # 取出 子序列
+    def data(pos):
+        return corpus[pos:pos+num_steps]
+
+    # 可以得到多少 batch，batch_size表示 打包多少个 子序列为一组
+    num_batches=num_subseqs//batch_size
+    for i in range(0,num_batches*batch_size,batch_size):
+        initial_indices_per_batch=initial_indices[i:i+batch_size]
+        X=[data(j) for j in initial_indices_per_batch]
+        Y=[data(j+1) for j in initial_indices_per_batch]
+        yield torch.tensor(X),torch.tensor(Y) # yield每次循环返回一个值；在函数外 可以 for X,Y in seq_data_iter_random()一批一批拿取数据
+
+
+# 使用 顺序分区生成一个小批量子序列
+# def seq_data_iter_sequential(corpus,batch_size,num_steps):
+#     # 前向偏移
+#     offset=random.randint(0,num_steps-1)
+#     corpus=corpus[offset:]
+#     num_subseqs=(len(corpus)-1)//num_steps
+#     initial_indices=list(range(0,num_subseqs*num_steps,num_steps))
+
+#     def data(pos):
+#         return corpus[pos:pos+num_steps]
+
+#     num_batches=num_subseqs//batch_size
+#     for i in range(0,num_batches*batch_size,batch_size):
+#         initial_indices_per_batch=initial_indices[i:i+batch_size]
+#         X=[data(j) for j in initial_indices_per_batch]
+#         Y=[data(j+1) for j in initial_indices_per_batch]
+#         yield torch.tensor(X),torch.tensor(Y)
+
+# 也就是 小批量里的两个数据，在下一个小批量里的两个数据，在位置方向上是连续的
+def seq_data_iter_sequential(corpus,batch_size,num_steps):
+    offset=random.randint(0,num_steps-1)
+    num_tokens=((len(corpus)-offset-1)//batch_size)*batch_size
+    Xs=torch.tensor(corpus[offset:offset+num_tokens])
+    Ys=torch.tensor(corpus[offset+1:offset+num_tokens+1])
+    Xs,Ys=Xs.reshape(batch_size,-1),Ys.reshape(batch_size,-1)
+    num_batches=Xs.shape[1]//num_steps
+    for i in range(0,num_batches*num_steps,num_steps):
+        X=Xs[:,i:i+num_steps]
+        Y=Ys[:,i:i+num_steps]
+        yield X,Y
+
+class SeqDataLoader:
+    def __init__(self,batch_size,num_steps,use_random_iter,max_tokens):
+        if use_random_iter:
+            self.data_iter_fn=seq_data_iter_random
+        else:
+            self.data_iter_fn=seq_data_iter_sequential
+        self.corpus.self.vocab=load_corpus_time_machine(max_tokens)
+        self.batch_size,self.num_steps=batch_size,num_steps
+
+    def __iter__(self):
+        return self.data_iter_fn(self.corpus,self.batch_size,self.num_steps)
+    
+def load_data_time_machine(batch_size,num_steps,use_random_iter=False,max_tokens=10000):
+    data_iter=SeqDataLoader(batch_size,num_steps,use_random_iter,max_tokens)
+
+    return data_iter,data_iter.vocab
+
+my_seq=list(range(35))
+for X,Y in seq_data_iter_sequential(my_seq,batch_size=2,num_steps=5):
+    print('X:',X)
+    print('Y:',Y)
+
 
 # corpus,vocab=load_corpus_time_machine()
 # print(len(corpus),vocab.__len__())
