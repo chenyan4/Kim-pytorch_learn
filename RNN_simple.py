@@ -39,7 +39,7 @@ class RNNModel(nn.Module):
         output=self.linear(Y)
         return output,state
 
-    def begin_state(self,device,batch_size=1):
+    def begin_state(self,batch_size=1,device=None):
         if not isinstance(self.rnn,nn.LSTM):
             state=torch.zeros((self.num_directions*self.rnn.num_layers,batch_size,self.num_hiddens),device=device)
             return state

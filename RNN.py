@@ -68,7 +68,7 @@ class RNNModelScratch:
 # prefix 生成句子，num_preds 是要生成多少个词
 def predict_ch8(prefix,num_preds,net,vocab,device):
     with torch.no_grad():
-        state=net.begin_state(device,batch_size=1)
+        state=net.begin_state(batch_size=1,device=device)
         outputs=[vocab.__getitem__(prefix[0])]
         def get_input():
             return torch.tensor(outputs[-1],device=device).reshape((1,1)) # 留下batch_size和 时间步长
@@ -100,9 +100,9 @@ def train_epoch_ch8(net,train_iter,loss,updater,lr,device,use_random_iter):
     for X,Y in train_iter:
         acc_num,l_num,num,batch=0,0,0,0
         if state is None or use_random_iter:
-            state=net.begin_state(device,batch_size=X.shape[0])
+            state=net.begin_state(batch_size=X.shape[0],device=device)
         else:
-            if isinstance(net,nn.Module) and not isinstance(state,list):
+            if isinstance(net,nn.Module) and not isinstance(state,(list,tuple)):
                 state.detach_() # detach()返回一个新张量视图，detach_()直接原地修改 x本身，把state 从旧的计算图中截断，避免反向传播跨越 无限长时间
             else:
                 for s in state:
@@ -159,7 +159,7 @@ def Accuracy(y_hat,y):
     cmp=(y_hat==y).sum().item()
     return cmp
 
-def draw_loss_acc(train_loss,train_acc):
+def draw_loss_acc(train_loss,train_acc,save_name):
     plt.figure(figsize=(12,4))
     plt.subplot(1,2,1)
     plt.plot(train_loss,label="train loss",color='b',linestyle='-',linewidth=2)
@@ -175,7 +175,7 @@ def draw_loss_acc(train_loss,train_acc):
     plt.title("Acc Curve")
     plt.legend(loc="upper right")
 
-    plt.savefig("/data/chenyan/pytorch_learn/data/images/RNN.png",dpi=300)
+    plt.savefig(f"/data/chenyan/pytorch_learn/data/images/{save_name}.png",dpi=300)
 
 
 num_hiddens=512
@@ -187,5 +187,5 @@ net=RNNModelScratch(vocab.__len__(),num_hiddens,'cuda:0',get_params,init_rnn_sta
 if __name__=="__main__":
     num_epochs,lr=500,1
     train_loss,train_acc=train_ch8(net,train_iter,vocab,lr,num_epochs,'cuda:0',use_random_iter=True)
-    draw_loss_acc(train_loss,train_acc)
+    draw_loss_acc(train_loss,train_acc,'RNN')
 
