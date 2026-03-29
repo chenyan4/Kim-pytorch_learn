@@ -169,7 +169,7 @@ class SeqDataLoader:
             self.data_iter_fn=seq_data_iter_random
         else:
             self.data_iter_fn=seq_data_iter_sequential
-        self.corpus.self.vocab=load_corpus_time_machine(max_tokens)
+        self.corpus,self.vocab=load_corpus_time_machine(max_tokens)
         self.batch_size,self.num_steps=batch_size,num_steps
 
     def __iter__(self):
@@ -181,9 +181,9 @@ def load_data_time_machine(batch_size,num_steps,use_random_iter=False,max_tokens
     return data_iter,data_iter.vocab
 
 my_seq=list(range(35))
-for X,Y in seq_data_iter_sequential(my_seq,batch_size=2,num_steps=5):
-    print('X:',X)
-    print('Y:',Y)
+# for X,Y in seq_data_iter_sequential(my_seq,batch_size=2,num_steps=5):
+#     print('X:',X)
+#     print('Y:',Y)
 
 
 # corpus,vocab=load_corpus_time_machine()
