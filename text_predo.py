@@ -89,7 +89,7 @@ def count_corpus(tokens):
         return collections.Counter(tokens)
 
 vocab=Vocab(tokens)
-print(list(vocab.token_to_idx.items())[0:10])
+# print(list(vocab.token_to_idx.items())[0:10])
 
 # for i in [0,10]:
 #     print('words:',tokens[i])
