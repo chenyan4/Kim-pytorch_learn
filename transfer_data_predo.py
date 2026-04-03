@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader,Dataset
 
 
 def read_data_nmt():
-    data_dir='/data/chenyan/pytorch_learn/data/fra-eng/fra.txt'
+    data_dir='/workspace/Kim-pytorch_learn/data/fra-eng/fra.txt'
     with open(data_dir,"r") as f:
         lines=f.readlines()
     # 统一一些“看起来像空格”的特殊空白字符，避免分词时切不开

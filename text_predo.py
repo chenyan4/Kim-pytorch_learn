@@ -4,7 +4,7 @@ import re
 import torch
 import random
 
-base_path="/data/chenyan/pytorch_learn/data/timemachine.txt"
+base_path="/workspace/Kim-pytorch_learn/data/timemachine.txt"
 def read_time_machine():
     with open(base_path,'r') as f:
         lines=f.readlines() # readlines() 按行 一行一行读文件，list[str]

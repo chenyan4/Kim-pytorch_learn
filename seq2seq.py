@@ -14,7 +14,7 @@ class Seq2SeqEncoder(nn.Module):
     def __init__(self,vocab_size,embed_size,num_hiddens,num_layers,dropout=0):
         super(Seq2SeqEncoder,self).__init__()
         self.embedding=nn.Embedding(vocab_size,embed_size) 
-        # 词嵌入，内部维护一个 可学习的矩阵（vocab_size,embed_size),用vocab_size就可以索引一个 稠密向量；一个输出（batch_size,seq_len) 经过embedding后 (batch_size,seq_len,embed_size)
+        # 词嵌入，内部维护一个 可学习的矩阵（vocab_size,embed_size),用vocab_size就可以索引一个 稠密向量；一个输出（batch_size,num_steps) 经过embedding后 (batch_size,num_steps,embed_size)
         # embedding 初始化是通过正态分布进行初始化的，保持独立，初始化 是随机采样，向量一样概率 ≈0（每个元素都是 随机采样的）
 
         # 正态分布初始化
@@ -135,7 +135,7 @@ def train_seq2seq(net,data_iter,lr,num_epochs,tgt_vocab,device):
             print(f'epoch:{epoch+1},train_loss:{train_loss[-1]}')
     return train_loss
 
-def draw_loss(train_loss):
+def draw_loss(train_loss,save_name):
     plt.figure(figsize=(12,4))
     plt.plot(train_loss,label="train_loss",color='b',linestyle='-',linewidth=2)
     plt.xlabel("Epoch")
@@ -144,7 +144,7 @@ def draw_loss(train_loss):
     plt.title('Loss Curve')
     plt.legend(loc='upper right')
 
-    plt.savefig("/data/chenyan/pytorch_learn/data/images/seq2seq.png",dpi=300)
+    plt.savefig(f"/workspace/Kim-pytorch_learn/data/images/{save_name}.png",dpi=300)
 
 def truncate_pad(line,num_steps,padding_token):
     if len(line)>num_steps:
@@ -227,7 +227,7 @@ if __name__=="__main__":
 
     net=EncoderDecoder(encoder,decoder)
     train_loss=train_seq2seq(net,train_iter,lr,num_epochs,tgt_vocab,device)
-    draw_loss(train_loss)
+    draw_loss(train_loss,'seq2seq')
 
     engs=['go .','i lost .','he\'s calm .','i\'m home .']
     fras=['va !','j\'ai perdu .','il est calme .','je suis chez moi .']
