@@ -5,7 +5,10 @@ from torchvision import transforms
 from torch import nn
 import torch.nn.functional as F
 
-alexnet_net=torchvision.models.alexnet(pretrained=True)
+alexnet=torchvision.models.alexnet(pretrained=True)
+vgg16=torchvision.models.vgg16(pretrained=True)
+googlenet=torchvision.models.googlenet(pretrained=True)
+resnet18=torchvision.models.resnet18(pretrained=True)
 
 def softmax(x):
     x=x-torch.max(x,dim=1,keepdim=True)[0] # 返回的是 最大元素和 下标，元组
@@ -32,5 +35,14 @@ trans=transforms.Compose([transforms.Resize(256),transforms.CenterCrop(224),tran
 image_path="/data/chenyan/pytorch_learn/data/images/9060.jpg_wh860.jpg"
 image=Image.open(image_path)
 
-output=evaluate_accuracy(alexnet_net,image,device='cuda:0',transform=trans)
-print(output)
+# print(f'AlexNet:{alexnet}\n')
+# print(f'VGG16:{vgg16}\n')
+# print(f'GoogleNet:{googlenet}\n')
+# print(f'ResNet18:{resnet18}')
+
+output=evaluate_accuracy(alexnet,image,device='cuda:0',transform=trans)
+
+print('AlexNet:',evaluate_accuracy(alexnet,image,device='cuda:0',transform=trans))
+print('VGG16:',evaluate_accuracy(vgg16,image,device='cuda:0',transform=trans))
+print('GoogleNet:',evaluate_accuracy(googlenet,image,device='cuda:0',transform=trans))
+print('ResNet18:',evaluate_accuracy(resnet18,image,device='cuda:0',transform=trans))
