@@ -41,7 +41,6 @@ image=Image.open(image_path)
 # print(f'ResNet18:{resnet18}')
 
 output=evaluate_accuracy(alexnet,image,device='cuda:0',transform=trans)
-
 print('AlexNet:',evaluate_accuracy(alexnet,image,device='cuda:0',transform=trans))
 print('VGG16:',evaluate_accuracy(vgg16,image,device='cuda:0',transform=trans))
 print('GoogleNet:',evaluate_accuracy(googlenet,image,device='cuda:0',transform=trans))
