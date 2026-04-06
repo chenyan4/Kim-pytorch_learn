@@ -97,7 +97,12 @@ def load_data_nmt(batch_size,num_steps,num_examples=600):
     data_array=[src_array,src_valid_len,tgt_array,tgt_valid_len]
     data_set=NMT(data_array)
 
-    data_iter=DataLoader(data_set,batch_size=batch_size,shuffle=True,drop_last=True)
+    pin=torch.cuda.is_available()
+    nw=min(4,(os.cpu_count() or 1))
+    dl_kw=dict(batch_size=batch_size,shuffle=True,drop_last=True,pin_memory=pin,num_workers=nw)
+    if nw>0:
+        dl_kw["persistent_workers"]=True
+    data_iter=DataLoader(data_set,**dl_kw)
     return data_iter,src_vocab,tgt_vocab
 
 # train_iter,src_vocab,tgt_vocab=load_data_nmt(batch_size=2,num_steps=8)
