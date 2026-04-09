@@ -288,7 +288,8 @@ def truncate_pad(line,num_steps,value):
     else:
         return line+[value]*(num_steps-len(line))
 
-# 
+# 这种做法破坏了位置编码，正确的应该也像训练一样，把预测的值拼起来，再丢进去得到下一个，但每一个词只能看自己和前一个，这样位置编码有了，掩码也正确了
+# 这里面 我每次只输入一个词，我有保存前一个词 在解码器不同层的输入，去做一个attention，虽然 破坏了位置信息（位置一直为0），但是 也能用（一个词也没啥位置信息）
 def predict_seq2seq(net,src_sentence,src_vocab,tgt_vocab,num_steps,device,save_attention_weights=False):
     net.eval()
     src_tokens=src_vocab[src_sentence.split()+['<eos>']]
