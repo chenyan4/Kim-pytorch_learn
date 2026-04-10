@@ -173,7 +173,7 @@ class BERTModel(nn.Module):
         self.encoder=BERTEncoder(vocab_size,num_hiddens,norm_shape,ffn_num_input,ffn_num_hiddens,num_heads,num_layers,dropout,max_len,key_size,query_size,value_size)
         self.mlm=MaskLM(vocab_size,num_hiddens,mlm_in_features)
         
-        self.hidden=nn.Sequential(nn.Linear(hid_in_features,num_hiddens,nn.Tanh()))
+        self.hidden=nn.Sequential(nn.Linear(hid_in_features,num_hiddens),nn.Tanh())
         self.nsp=NextSentencePred(nsp_in_features)
 
     def forward(self,tokens,segments,valid_lens=None,pred_positions=None):

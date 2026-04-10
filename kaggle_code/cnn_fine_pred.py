@@ -32,7 +32,7 @@ def evaluate_accuracy(net,image,device,transform=None):
 
 trans=transforms.Compose([transforms.Resize(256),transforms.CenterCrop(224),transforms.ToTensor(),transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])])
 
-image_path="/workspace/Kim-pytorch_learn/data/images/9060.jpg_wh860.jpg"
+image_path="/workspace/Kim-pytorch_learn/data/images/sunflower.jpeg"
 image=Image.open(image_path)
 
 # print(f'AlexNet:{alexnet}\n')
