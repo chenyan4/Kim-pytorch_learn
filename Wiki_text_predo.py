@@ -3,7 +3,8 @@
 import os 
 import random
 import torch
-
+from text_predo import Vocab
+from torch.utils.data import Dataset,DataLoader
 
 base_url="/workspace/Kim-pytorch_learn/data/db1ec-main/wikitext-2"
 
@@ -19,7 +20,7 @@ def _get_next_sentence(sentence,next_sentence,paragraphs):
     if random.random()<0.5:
         is_next=True
     else:
-        next_sentence=random_choice(random.choice(paragraphs)) # paragraphs是二维数组，随机选择句子
+        next_sentence=random.choice(random.choice(paragraphs)) # paragraphs是二维数组，随机选择句子
         is_next=False
     return sentence,next_sentence,is_next
 
@@ -36,8 +37,6 @@ def _get_nsp_data_from_paragraph(paragraph,paragraphs,vocab,max_len):
     for i in range(len(paragraph)-1):
         tokens_a,tokens_b,is_next=_get_next_sentence(paragraph[i],paragraph[i+1],paragraphs)
 
-        tokens_a=tokens_a.split()
-        tokens_b=tokens_b.split()
         # 考虑一个 <cls> 和 两个 <sep>
         if len(tokens_a)+len(tokens_b)+3>max_len:
             continue
@@ -62,11 +61,11 @@ def _replace_mlm_tokens(tokens,candidate_pred_positions,num_mlm_preds,vocab):
             if random.random()<0.5:
                 masked_token=tokens[mlm_pred_position]
             else:
-                random_idx=random_randint(0,vocab.__len__()-1)
+                random_idx=random.randint(0,vocab.__len__()-1)
                 masked_token=vocab.to_tokens(random_idx)
 
         mlm_input_tokens[mlm_pred_position]=masked_token
-        pred_positions_and_labels.append((mlm_pred_position,token[mlm_pred_position])) # 保存替换的词 和 该地方正确的词
+        pred_positions_and_labels.append((mlm_pred_position,tokens[mlm_pred_position])) # 保存替换的词 和 该地方正确的词
     return mlm_input_tokens,pred_positions_and_labels
 
 def _get_mlm_data_from_tokens(tokens,vocab):
@@ -75,10 +74,10 @@ def _get_mlm_data_from_tokens(tokens,vocab):
         if token in ['<cls>','<seq>']:
             continue
         candidate_pred_positions.append(i)
-    num_mlm_preds=max(1,round(len(tokens)*0.15)) # round 是四舍五入
+    num_mlm_preds=max(1,round(len(tokens)*0.15)) # round 是四舍五入，每个tokens的长度是不一样的，所有选择 预测词数也不一样
     mlm_input_tokens,pred_positions_and_labels=_replace_mlm_tokens(tokens,candidate_pred_positions,num_mlm_preds,vocab)
 
-    pred_positions_and_labels=sorted(pred_positions_and_labels,key=lambda x:x[0],reverse=True) # 还是按照 下标从低到高排列
+    pred_positions_and_labels=sorted(pred_positions_and_labels,key=lambda x:x[0],reverse=False) # 还是按照 下标从低到高排列
     pred_positions=[v[0] for v in pred_positions_and_labels]
     mlm_pred_labels=[v[1] for v in pred_positions_and_labels]
     return vocab.__getitem__(mlm_input_tokens),pred_positions,vocab.__getitem__(mlm_pred_labels)
@@ -89,8 +88,54 @@ def _pad_bert_inputs(examples,max_len,vocab):
     all_pred_positions,all_mlm_weights,all_mlm_labels=[],[],[]
     nsp_labels=[]
     for (token_ids,pred_positions,mlm_pred_label_ids,segments,is_next) in examples:
-        all_token_ids.append(torch.tensor(vocab.__getitem__(token_ids+['<pad>']*(max_len-len(token_ids))),dtype=torch.long()))
+        all_token_ids.append(torch.tensor(vocab.__getitem__(token_ids+['<pad>']*(max_len-len(token_ids))),dtype=torch.long))
         all_segments.append(torch.tensor(segments+[0]*(max_len-len(segments)),dtype=torch.long))
-        
+        valid_lens.append(torch.tensor(len(token_ids),dtype=torch.float32))
+        all_pred_positions.append(torch.tensor(pred_positions+[0]*(max_num_mlm_preds-len(pred_positions))))
+        # 对于没有预测的 词元要有掩码
+        all_mlm_weights.append(torch.tensor([1.0]*len(pred_positions)+[0.0]*(max_num_mlm_preds-len(pred_positions)),dtype=torch.float32))
+        all_mlm_labels.append(torch.tensor(mlm_pred_label_ids+[0]*(max_num_mlm_preds-len(mlm_pred_label_ids)),dtype=torch.long))
+        nsp_labels.append(torch.tensor(is_next,dtype=torch.long))
+    return (all_token_ids,all_segments,valid_lens,all_pred_positions,all_mlm_weights,all_mlm_labels,nsp_labels)
 
-print(_read_wiki(base_url)[:5])
+def tokenize(lines,token="word"):
+    if token=="word":
+        return [line.split() for line in lines]
+    if token=="char":
+        return [list(line) for line in lines]
+    else:
+        print(f'输入错误令牌类型:{token}')
+
+class _WiKiTextDataset(Dataset):
+    def __init__(self,paragraphs,max_len):
+        paragraphs=[tokenize(paragraph,token="word") for paragraph in paragraphs] # 是一个三维的
+        sentences=[]
+        for paragraph in paragraphs:
+            for sentence in paragraph:
+                sentences.append(sentence)
+        self.vocab=Vocab(sentences,min_freq=5,reserved_tokens=['<pad>','<mask>','<cls>','<seq>'])
+        examples=[]
+        for paragraph in paragraphs:
+            examples.extend(_get_nsp_data_from_paragraph(paragraph,paragraphs,self.vocab,max_len)) # extend 可以把列表展开，放进另一个 列表
+        examples=[(_get_mlm_data_from_tokens(token,self.vocab)+(segments,is_next)) for token,segments,is_next in examples]
+        self.all_token_ids,self.all_segments,self.valid_lens,self.all_pred_positions,self.all_mlm_weights,self.all_mlm_labels,self.nsp_labels=_pad_bert_inputs(examples,max_len,self.vocab)
+
+    def __len__(self):
+        return len(self.all_token_ids)
+
+    def __getitem__(self,idx):
+        return (self.all_token_ids[idx],self.all_segments[idx],self.valid_lens[idx],self.all_pred_positions[idx],self.all_mlm_weights[idx],self.all_mlm_labels[idx],self.nsp_labels[idx])
+
+def load_data_wiki(batch_size,max_len):
+    paragraphs=_read_wiki(base_url)
+    train_set=_WiKiTextDataset(paragraphs,max_len)
+    train_iter=DataLoader(train_set,batch_size=batch_size,shuffle=True,num_workers=2)
+    return train_iter,train_set.vocab
+
+if __name__=="__main__":
+    batch_size,max_len=512,64
+    train_iter,vocab=load_data_wiki(batch_size,max_len)
+    for (token_X,segments_X,valid_lens_X,pred_positions_X,mlm_weights_X,mlm_Y,nsp_Y) in train_iter:
+        print(token_X.shape,segments_X.shape,valid_lens_X.shape,pred_positions_X.shape,mlm_weights_X.shape,mlm_Y.shape,nsp_Y.shape)
+        break
+    print(vocab.__len__())

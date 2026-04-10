@@ -15,6 +15,8 @@
 import torch
 from torch import nn
 import math
+from Wiki_text_predo import load_data_wiki
+import matplotlib.pyplot as plt
 
 # 拼接两个句子，返回 句子和分割编码
 def get_tokens_and_segments(tokens_a,tokens_b=None):
@@ -45,7 +47,7 @@ def masked_softmax(X,valid_lens=None):
     return nn.functional.softmax(X.reshape(shape),dim=-1)
 
 
-def DotProductAttention(nn.Module):
+class DotProductAttention(nn.Module):
     def __init__(self,dropout):
         super(DotProductAttention,self).__init__()
         self.dropout=nn.Dropout(dropout)
@@ -59,14 +61,14 @@ def DotProductAttention(nn.Module):
 def transpose_qkv(X,num_heads):
     X=X.reshape(X.shape[0],X.shape[1],num_heads,-1)
     X=X.permute(0,2,1,3)
-    return X.reshape(-1,X.shape[2],X.reshape[3])
+    return X.reshape(-1,X.shape[2],X.shape[3])
 
 def transpose_output(X,num_heads):
     X=X.reshape(-1,num_heads,X.shape[1],X.shape[2])
     X=X.permute(0,2,1,3)
     return X.reshape(X.shape[0],X.shape[1],-1)
 
-def MultiHeadAttention(nn.Module):
+class MultiHeadAttention(nn.Module):
     def __init__(self,key_size,query_size,value_size,num_hiddens,num_heads,dropout,bias=False):
         super(MultiHeadAttention,self).__init__()
         self.num_heads=num_heads
@@ -84,23 +86,23 @@ def MultiHeadAttention(nn.Module):
         if valid_lens is not None:
             valid_lens=valid_lens.repeat_interleave(self.num_heads,dim=0)
         output=self.attention(queries,keys,values,valid_lens)
-        output_concat=transpose_output(X,self.num_heads)
+        output_concat=transpose_output(output,self.num_heads)
         return self.W_o(output_concat)
 
-def AddNorm(nn.Module):
+class AddNorm(nn.Module):
     def __init__(self,normlized_shape,dropout):
         super(AddNorm,self).__init__()
-        self.ln=nn.LayerNorm(normalized_shape)
+        self.ln=nn.LayerNorm(normlized_shape)
         self.dropout=nn.Dropout(dropout)
 
     def forward(self,X,Y):
         return self.ln(X+self.dropout(Y))
 
-def PositionWiseFFN(nn.Module):
+class PositionWiseFFN(nn.Module):
     def __init__(self,ffn_num_input,ffn_num_hiddens,ffn_num_outputs):
         super(PositionWiseFFN,self).__init__()
         self.dense1=nn.Linear(ffn_num_input,ffn_num_hiddens)
-        self.relu=nn.ReLU
+        self.relu=nn.ReLU()
         self.dense2=nn.Linear(ffn_num_hiddens,ffn_num_outputs)
 
     def forward(self,X):
@@ -108,14 +110,15 @@ def PositionWiseFFN(nn.Module):
 
 class EncoderBlock(nn.Module):
     def __init__(self,key_size,query_size,value_size,num_hiddens,norm_shape,ffn_num_input,ffn_num_hiddens,num_heads,dropout,use_bias=False):
+        super(EncoderBlock,self).__init__()
         self.attention=MultiHeadAttention(key_size,query_size,value_size,num_hiddens,num_heads,dropout,use_bias)
         self.addnorm1=AddNorm(norm_shape,dropout)
         self.ffn=PositionWiseFFN(ffn_num_input,ffn_num_hiddens,num_hiddens)
         self.addnorm2=AddNorm(norm_shape,dropout)
 
     def forward(self,X,valid_lens):
-        Y=self.addnorm1(self.attention(X,X,X,valid_lens))
-        return self.addnorm2(self.ffn(Y))
+        Y=self.addnorm1(X,self.attention(X,X,X,valid_lens))
+        return self.addnorm2(Y,self.ffn(Y))
 
 class BERTEncoder(nn.Module):
     def __init__(self,vocab_size,num_hiddens,norm_shape,ffn_num_input,ffn_num_hiddens,num_heads,num_layers,dropout,max_len=1000,key_size=768,query_size=768,value_size=768,use_bias=False):
@@ -127,7 +130,7 @@ class BERTEncoder(nn.Module):
         for i in range(num_layers):
             self.blks.add_module(f'block{i}',EncoderBlock(key_size,query_size,value_size,num_hiddens,norm_shape,ffn_num_input,ffn_num_hiddens,num_heads,dropout,use_bias))
         # 定义位置编码（可学习）
-        self.pos_embedding=nn.Paramters(torch.randn(size=(1,max_lens,num_hiddens)))
+        self.pos_embedding=nn.Parameter(torch.randn(size=(1,max_len,num_hiddens)))
     
     def forward(self,tokens,segments,valid_lens):
         X=self.token_embedding(tokens)+self.segment(segments)
@@ -152,7 +155,7 @@ class MaskLM(nn.Module):
         pred_positions=pred_positions.reshape(-1)
         batch_size=X.shape[0]
         batch_idx=torch.arange(0,batch_size)
-        batch_idx=batch_id.repeat_interleave(num_pred_positions) # [batch_size × num_pred_positions,]
+        batch_idx=batch_idx.repeat_interleave(num_pred_positions) # [batch_size × num_pred_positions,]
         masked_X=X[batch_idx,pred_positions] # [batch_size × num_pred_positions,num_hiddens]
         masked_X=masked_X.reshape(batch_size,num_pred_positions,-1)
         mlm_Y_hat=self.mlp(masked_X)
@@ -161,7 +164,7 @@ class MaskLM(nn.Module):
 # 下一个句子预测,输入[batch_size,seq_len,num_hiddens],在第一个维度上 torch.flatten,得到 [batch_size,seq_len × num_hiddens]
 class NextSentencePred(nn.Module):
     def __init__(self,num_inputs):
-        super(NextSentencePred,self).__init__():
+        super(NextSentencePred,self).__init__()
         self.output=nn.Linear(num_inputs,2)
 
     def forward(self,X):
@@ -185,4 +188,83 @@ class BERTModel(nn.Module):
         nsp_Y_hat=self.nsp(self.hidden(encoded_X[:,0,:])) # 取 <cls>这个来做预测
         return encoded_X,mlm_Y_hat,nsp_Y_hat
 
+def _get_batch_loss_bert(net,loss,vocab_size,tokens_X,segments_X,valid_lens_X,pred_positions_X,mlm_weights_X,mlm_Y,nsp_Y):
+    _,mlm_Y_hat,nsp_Y_hat=net(tokens_X,segments_X,valid_lens_X.reshape(-1),pred_positions_X)
+    mlm_l=loss(mlm_Y_hat.reshape(-1,vocab_size),mlm_Y.reshape(-1)) # 求解完是一个一维张量
+    w=mlm_weights_X.reshape(-1)
+    mlm_l=(mlm_l*w).sum()/(w.sum()+1e-8)
+    nsp_l=loss(nsp_Y_hat,nsp_Y).mean()
+    l=mlm_l+nsp_l
+    return mlm_l,nsp_l,l
 
+def train_bert(train_iter,net,loss,vocab_size,device,num_steps):
+    net=net.to(device)
+    updater=torch.optim.Adam(net.parameters(),lr=1e-3)
+    train_loss,mlm_loss,nsp_loss=[],[],[]
+
+    num_steps_reached,step=False,0
+    while step<num_steps and not num_steps_reached:
+        for tokens_X,segments_X,valid_lens_X,pred_positions_X,mlm_weights_X,mlm_Y,nsp_Y in train_iter:
+            tokens_X=tokens_X.to(device)
+            segments_X=segments_X.to(device)
+            valid_lens_X=valid_lens_X.to(device)
+            pred_positions_X=pred_positions_X.to(device)
+            mlm_weights_X=mlm_weights_X.to(device)
+            mlm_Y=mlm_Y.to(device)
+            nsp_Y=nsp_Y.to(device)
+
+            updater.zero_grad()
+            mlm_l,nsp_l,l=_get_batch_loss_bert(net,loss,vocab_size,tokens_X,segments_X,valid_lens_X,pred_positions_X,mlm_weights_X,mlm_Y,nsp_Y)
+            l.backward()
+            updater.step()
+
+            train_loss.append(l.item())
+            mlm_loss.append(mlm_l.item())
+            nsp_loss.append(nsp_l.item())
+            step+=1
+            print(f'step:{step},MLM loss:{mlm_loss[-1]},NSP loss:{nsp_loss[-1]}')
+            if step==num_steps:
+                num_steps_reached=True
+                break
+    return train_loss,mlm_loss,nsp_loss
+
+def draw_bert_loss(train_loss,mlm_loss,nsp_loss):
+    plt.figure(figsize=(8,4))
+    plt.plot(train_loss,label='train loss',color='b',linestyle='-',linewidth=2)
+    plt.plot(mlm_loss,label='mlm loss',color='r',linestyle='--',linewidth=2)
+    plt.plot(nsp_loss,label='nsp loss',color='g',linestyle='-.',linewidth=2)
+    plt.xlabel("Step")
+    plt.ylabel("Loss")
+    plt.grid(True)
+    plt.title("Loss Curve")
+    plt.legend(loc="upper right")
+
+    plt.savefig("/workspace/Kim-pytorch_learn/data/images/bert.png",dpi=300)     
+
+# 利用bert 抽取特征
+def get_bert_encoding(net,tokens_a,tokens_b=None):
+    tokens,segments=get_tokens_and_segments(tokens_a,tokens_b)
+    token_ids=torch.tensor(vocab.__getitem__(tokens),device=device).unsqueeze(0)
+    segments=torch.tensor(segments,device=device).unsqueeze(0)
+    valid_lens=torch.tensor(len(tokens),device=device).unsqueeze(0)
+    encoded_X,_,_=net(token_ids,segments)
+    return encoded_X  
+
+
+if __name__=="__main__":
+    batch_size,max_len=512,64
+    train_iter,vocab=load_data_wiki(batch_size,max_len)
+
+    net=BERTModel(vocab.__len__(),num_hiddens=128,norm_shape=[128],ffn_num_input=128,ffn_num_hiddens=256,num_heads=2,num_layers=2,dropout=0.2,key_size=128,query_size=128,value_size=128,hid_in_features=128,mlm_in_features=128,nsp_in_features=128)
+
+    device='cuda:0'
+    loss=nn.CrossEntropyLoss(reduction='none')
+
+    train_loss,mlm_loss,nsp_loss=train_bert(train_iter,net,loss,vocab.__len__(),device,50)
+    draw_bert_loss(train_loss,mlm_loss,nsp_loss)
+
+    tokens_a=['a','crane','is','flying']
+    encoded_text=get_bert_encoding(net,tokens_a)
+    encoded_text_cls=encoded_text[:,0,:]
+    encoded_text_crane=encoded_text[:,2,:]
+    print(encoded_text.shape,encoded_text_cls.shape,encoded_text_crane[0][:3])
